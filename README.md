@@ -29,8 +29,8 @@ npm.cmd run dev
 
 ההגדרות מוכנות ב־`netlify.toml`. כתובת הפרויקט שנמסרה היא `https://ikvhhktviorkubyytmzn.supabase.co`.
 
-1. צרו מאגר פרטי, למשל `rivka387/clementina`, והעלו אליו את תוכן תיקיית `beyachad` כשורש המאגר. אין להעלות את `node_modules`, את `dist` או קובצי `.env.local`.
-2. ב־Netlify בחרו **Add new project → Import an existing project → GitHub**, ובחרו במאגר. אם קובצי האפליקציה בשורש המאגר, שדה Base directory נשאר ריק. אם מעלים את תיקיית האב כולה, הגדירו Base directory ל־`beyachad`.
+1. קוד האפליקציה נמצא במאגר הציבורי [`Rivka387/clementina`](https://github.com/Rivka387/clementina), כשהאפליקציה בשורש המאגר. קובצי `.env.local`, `node_modules` ו־`dist` אינם נכללים בו.
+2. ב־Netlify בחרו **Add new project → Import an existing project → GitHub**, ובחרו ב־`Rivka387/clementina`. השאירו את Base directory ריק.
 3. הקובץ מגדיר אוטומטית Node 24, פקודת בנייה `npm run build:cloud` ותיקיית פרסום `dist`.
 4. ב־Environment variables הוסיפו `VITE_SUPABASE_PUBLISHABLE_KEY`, עם ערך מ־Supabase → Settings → API Keys. נדרש שיהיה זמין בזמן Build בהקשר Production. הכתובת `VITE_SUPABASE_URL` כבר מוגדרת בקובץ Netlify.
 5. לפני שימוש אמיתי, הריצו את מיגרציית Supabase לפי ההוראות למעלה.
