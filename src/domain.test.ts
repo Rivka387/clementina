@@ -1,5 +1,5 @@
 import { describe,it,expect } from 'vitest';
-import { addDays,blankEntry,demoData,entryFor,localDay,score,streak,upsertEntry,upsertWeight,validEntry,weekDates } from './domain';
+import { addDays,blankEntry,demoData,entryFor,localDay,removeFoodEntry,score,streak,upsertEntry,upsertFoodEntry,upsertFoodPlan,upsertWeight,validEntry,validFoodEntry,validFoodPlan,weekDates } from './domain';
 describe('daily tracking integrity',()=>{
  it('uses Jerusalem calendar days in summer and winter',()=>{
   expect(localDay(new Date('2026-10-31T22:30:00Z'))).toBe('2026-11-01');
@@ -35,5 +35,29 @@ describe('daily tracking integrity',()=>{
  it('rejects invalid counters, energy and oversized notes',()=>{
   const e=blankEntry('me','2026-11-01');expect(validEntry(e)).toBe(true);
   for(const bad of [{water:-1},{water:1.5},{walk:601},{energy:6},{note:'a'.repeat(501)}])expect(validEntry({...e,...bad})).toBe(false);
+ });
+ it('keeps food records by id and rejects incomplete or malformed records',()=>{
+  const data=demoData('2026-11-01');const entry=data.food_entries[0];
+  expect(validFoodEntry(entry)).toBe(true);
+  expect(validFoodEntry({...entry,calories:null})).toBe(true);
+  expect(validFoodEntry({...entry,calories:0})).toBe(true);
+  expect(validFoodEntry({...entry,calories:420})).toBe(true);
+  expect(validFoodEntry({...entry,amount:''})).toBe(true);
+  const changed={...entry,amount:'שתי קערות'};
+  const updated=upsertFoodEntry(upsertFoodEntry(data,changed),changed);
+  expect(updated.food_entries.length).toBe(data.food_entries.length);
+  expect(updated.food_entries.find(item=>item.id===entry.id)?.amount).toBe('שתי קערות');
+  expect(data.food_entries[0].amount).toBe('קערה אחת');
+  expect(removeFoodEntry(updated,entry.id).food_entries.some(item=>item.id===entry.id)).toBe(false);
+  for(const bad of [null,{...entry,time:'25:90'},{...entry,amount:'x'.repeat(81)},{...entry,food:'x'.repeat(161)},{...entry,kind:'dessert'},{...entry,calories:-1},{...entry,calories:10001},{...entry,calories:12.5},{...entry,calories:'420'}])expect(validFoodEntry(bad)).toBe(false);
+ });
+ it('keeps one private food plan per user',()=>{
+  const data=demoData('2026-11-01');
+  const plan={user_id:'me',breakfast:'יוגורט ופרי',lunch:'',dinner:'',snacks:'',guidance:'להכין מראש'};
+  expect(validFoodPlan(plan)).toBe(true);
+  const updated=upsertFoodPlan(upsertFoodPlan(data,plan),{...plan,lunch:'ארוחה בבית'});
+  expect(updated.food_plans).toHaveLength(1);
+  expect(updated.food_plans[0].lunch).toBe('ארוחה בבית');
+  expect(validFoodPlan({...plan,breakfast:'x'.repeat(501)})).toBe(false);
  });
 });

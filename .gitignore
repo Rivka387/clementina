@@ -7,3 +7,4 @@ dist/
 .sites-runtime/
 .sites-workflow/
 artifacts/
+.netlify/

@@ -1,0 +1,34 @@
+[build]
+  command = "npm run build:cloud"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+  VITE_SUPABASE_URL = "https://ikvhhktviorkubyytmzn.supabase.co"
+
+# Configure VITE_SUPABASE_PUBLISHABLE_KEY in Netlify's environment variables.
+# Production builds deliberately fail if the cloud configuration is missing.
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://ikvhhktviorkubyytmzn.supabase.co wss://ikvhhktviorkubyytmzn.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
