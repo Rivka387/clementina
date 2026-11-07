@@ -28,7 +28,7 @@ export default function Together({
       <section className="together-hero">
         <div>
           <span className="eyebrow">המרחב המשותף</span>
-          <h2>{data.members.length === 2 ? 'ההתקדמות שלכן, ביחד.' : 'אפשר גם ביחד.'}</h2>
+          <h2>{data.members.length === 2 ? 'יותר קל בשתיים.' : 'אפשר גם ביחד.'}</h2>
           <p>
             {data.members.length === 2
               ? `${sharedDays} ימים פעילים לשתיכן בשבוע האחרון.`

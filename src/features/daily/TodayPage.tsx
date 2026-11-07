@@ -122,7 +122,7 @@ export default function TodayPage({
             </div>
             <div className="gentle-footnote">
               <Leaf size={15} />
-              אפשר לחזור ולעדכן גם בהמשך היום.
+              לא צריך יום מושלם. גם צעד קטן נחשב.
             </div>
           </section>
         </div>
@@ -149,6 +149,8 @@ export default function TodayPage({
                 </div>
                 <p className="partner-caption">
                   {score(partnerEntry, partner)} מתוך 6 הרגלים ויעדים הושלמו.
+                  <br />
+                  יותר קל בשתיים, כל אחת בקצב שלה.
                 </p>
                 <div className="partner-metrics">
                   <span>

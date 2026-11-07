@@ -37,15 +37,13 @@ export default function Auth({ notify }: { notify: (s: string) => void }) {
           <img src="/clementina.svg" width="44" height="44" alt="" />
           <strong>קלמנטינה</strong>
         </div>
-        <span className="welcome-tag">קצת יותר קל לעקוב.</span>
+        <span className="welcome-tag">כל צעד קטן נחשב.</span>
         <h1>
-          היום שלך,
+          דברים טובים{' '}
           <br />
-          <em>בתמונה אחת.</em>
+          <em>מבשילים ביחד.</em>
         </h1>
         <p>
-          ארוחות, מים, תנועה והרגלים.
-          <br />
           מקום אחד לדברים שעושים לך טוב.
         </p>
         <div className="welcome-features">

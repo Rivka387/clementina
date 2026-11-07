@@ -32,7 +32,7 @@ export default function AppLayout({
         <a className="brand" href="#today">
           <img src="/clementina.svg" alt="" />
           <span>
-            קלמנטינה<small>תזונה, הרגלים ומה שביניהם</small>
+            קלמנטינה<small>דברים טובים מבשילים ביחד</small>
           </span>
         </a>
         <div className="sidebar-label">המעקב שלי</div>
@@ -53,8 +53,8 @@ export default function AppLayout({
           <span className="stat-icon green">
             <Leaf size={20} />
           </span>
-          <strong>בקצב שלך</strong>
-          <p>מעקב יומי, לבד או ביחד.</p>
+          <strong>מספיק צעד אחד.</strong>
+          <p>להתחיל. להמשיך. בקצב שלך.</p>
         </div>
         <button className="sidebar-profile" onClick={() => onNavigate('settings')}>
           <span className="avatar peach">{me.name.slice(0, 1)}</span>
@@ -90,7 +90,7 @@ export default function AppLayout({
           {children}{' '}
           <footer>
             <span>קלמנטינה</span>
-            <span>המעקב האישי שלך</span>
+            <span>דברים טובים מבשילים ביחד</span>
           </footer>
         </main>
       </div>{' '}

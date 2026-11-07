@@ -106,7 +106,7 @@ export default function Progress({
           })}
         </div>
         <p className="gentle-footnote">
-          <Heart size={16} /> ימים ללא דיווח מוצגים כ־0.
+          <Heart size={16} /> גם יום איטי הוא חלק מהדרך. אפשר להתחיל שוב בכל יום.
         </p>
       </section>
       <div className="progress-grid">
