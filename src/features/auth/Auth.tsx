@@ -51,7 +51,7 @@ export default function Auth({ notify }: { notify: (s: string) => void }) {
           דברים טובים <br />
           <em>מבשילים ביחד.</em>
         </h1>
-        <p>מקום אחד לדברים שעושים לך טוב.</p>
+
         <div className="welcome-features">
           <span>
             <Utensils size={20} /> יומן אכילה אישי
