@@ -33,9 +33,9 @@ it('opens the sample dashboard on demand even when Supabase is configured', asyn
   const root = createRoot(host);
   try {
     await act(async () => { root.render(<App />); });
-    expect(host.textContent).toContain('טעימה קטנה מקלמנטינה');
-    expect(host.textContent).toContain('מה עושים היום?');
-    expect(host.querySelectorAll('.daily-steps li')).toHaveLength(3);
+    expect(host.textContent).toContain('מצב הדגמה');
+    expect(host.textContent).toContain('היום שלי');
+    expect(host.querySelectorAll('.overview-cards .summary-card')).toHaveLength(4);
     expect(host.textContent).toContain('כמות וקלוריות רק אם תרצי');
     expect(host.querySelector('.food-list')).toBeNull();
     expect(host.textContent).toContain('תכנון הארוחות שלי');
