@@ -65,11 +65,12 @@ small {
   color: var(--purple);
   background: var(--purple-light);
 }
-.avatar-large {
+.avatar.avatar-large {
   width: 49px;
   height: 49px;
   font-size: 20px;
   border: 0;
+  border-color: #fff;
 }
 .topbar-right {
   display: flex;
@@ -203,7 +204,7 @@ small {
   width: 61px;
   height: 61px;
 }
-.ring-small b {
+.ring.ring-small b {
   font-size: 18px;
 }
 .energy-face i:first-child {
@@ -212,11 +213,11 @@ small {
 .energy-face i:nth-child(2) {
   right: 6px;
 }
-.face-0 b {
+.energy-face.face-0 b {
   transform: rotate(180deg);
   top: 15px;
 }
-.face-1 b {
+.energy-face.face-1 b {
   border-radius: 0;
   height: 0;
   top: 16px;
@@ -1645,8 +1646,8 @@ a {
   border-bottom: 1.5px solid;
   border-color: #7b899b;
 }
-.face-3 b,
-.face-4 b {
+.energy-face.face-3 b,
+.energy-face.face-4 b {
   height: 6px;
   width: 10px;
   left: 6px;
@@ -1654,7 +1655,7 @@ a {
   border-top: 0;
   border-top-color: #7b899b;
 }
-.face-4 b {
+.energy-face.face-4 b {
   background: #7b899b;
 }
 .energy-caption {
@@ -3431,7 +3432,7 @@ textarea:focus {
   .settings-grid .panel {
     padding: 22px;
   }
-  .form-grid label {
+  .settings-grid .form-grid label {
     font-size: 13px;
   }
   .care-note p {
