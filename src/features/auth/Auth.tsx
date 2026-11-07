@@ -1,11 +1,20 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { ArrowLeft, LoaderCircle, TrendingUp, UsersRound, Utensils } from 'lucide-react';
+import {
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+  TrendingUp,
+  UsersRound,
+  Utensils,
+} from 'lucide-react';
 import { supabase } from '../../data';
 
 export default function Auth({ notify }: { notify: (s: string) => void }) {
   const [email, setEmail] = useState(''),
     [password, setPassword] = useState(''),
+    [showPassword, setShowPassword] = useState(false),
     [signup, setSignup] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
@@ -39,13 +48,10 @@ export default function Auth({ notify }: { notify: (s: string) => void }) {
         </div>
         <span className="welcome-tag">כל צעד קטן נחשב.</span>
         <h1>
-          דברים טובים{' '}
-          <br />
+          דברים טובים <br />
           <em>מבשילים ביחד.</em>
         </h1>
-        <p>
-          מקום אחד לדברים שעושים לך טוב.
-        </p>
+        <p>מקום אחד לדברים שעושים לך טוב.</p>
         <div className="welcome-features">
           <span>
             <Utensils size={20} /> יומן אכילה אישי
@@ -73,18 +79,35 @@ export default function Auth({ notify }: { notify: (s: string) => void }) {
             onChange={(e) => setEmail(e.target.value)}
           />
         </label>
-        <label>
-          סיסמה
-          <input
-            type="password"
-            minLength={8}
-            required
-            autoComplete={signup ? 'new-password' : 'current-password'}
-            dir="ltr"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
+        <div className="password-control">
+          <label htmlFor="auth-password">סיסמה</label>
+          <div className="password-field">
+            <input
+              id="auth-password"
+              type={showPassword ? 'text' : 'password'}
+              minLength={8}
+              required
+              autoComplete={signup ? 'new-password' : 'current-password'}
+              dir="ltr"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              className="password-toggle"
+              aria-label={showPassword ? 'הסתרת הסיסמה' : 'הצגת הסיסמה'}
+              aria-pressed={showPassword}
+              aria-controls="auth-password"
+              onClick={() => setShowPassword((visible) => !visible)}
+            >
+              {showPassword ? (
+                <EyeOff size={18} aria-hidden="true" />
+              ) : (
+                <Eye size={18} aria-hidden="true" />
+              )}
+            </button>
+          </div>
+        </div>
         {error && (
           <p role="alert" className="error-text">
             {error}
@@ -100,6 +123,7 @@ export default function Auth({ notify }: { notify: (s: string) => void }) {
           className="text-button"
           onClick={() => {
             setSignup(!signup);
+            setShowPassword(false);
             setError('');
           }}
         >

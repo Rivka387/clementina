@@ -25,6 +25,38 @@ it('renders a visible local page with the configured Supabase project', async ()
     });
     expect(host.textContent).toContain('איזה כיף שחזרת');
     expect(host.querySelector('input[type="email"]')).not.toBeNull();
+    const password = host.querySelector<HTMLInputElement>('#auth-password')!;
+    const reveal = host.querySelector<HTMLButtonElement>('[aria-label="הצגת הסיסמה"]')!;
+    expect(reveal.type).toBe('button');
+    expect(password.type).toBe('password');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        password,
+        'example-password',
+      );
+      password.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    let submits = 0;
+    host.querySelector('form')!.addEventListener('submit', () => submits++);
+    await act(async () => reveal.click());
+    expect(password.type).toBe('text');
+    expect(password.value).toBe('example-password');
+    expect(reveal.getAttribute('aria-label')).toBe('הסתרת הסיסמה');
+    expect(reveal.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => reveal.click());
+    expect(password.type).toBe('password');
+    expect(password.value).toBe('example-password');
+    await act(async () => reveal.click());
+    const signup = [...host.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('אין לך חשבון? הרשמה'),
+    )!;
+    await act(async () => signup.click());
+    expect(password.type).toBe('password');
+    expect(password.autocomplete).toBe('new-password');
+    await act(async () => reveal.click());
+    expect(password.type).toBe('text');
+    expect(password.value).toBe('example-password');
+    expect(submits).toBe(0);
   } finally {
     await act(async () => {
       root.unmount();

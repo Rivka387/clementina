@@ -290,6 +290,40 @@ label select {
 .auth-form label {
   margin-bottom: 7px;
 }
+.password-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 18px 0 7px;
+}
+.auth-form .password-control label {
+  margin: 0;
+}
+.password-field {
+  position: relative;
+}
+.password-field input {
+  padding-right: 48px;
+}
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+}
+.password-toggle:hover {
+  background: var(--green-light);
+  color: var(--green);
+}
 .skip-link {
   position: fixed;
   top: -100px;
