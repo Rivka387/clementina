@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&family=Heebo:wght@400;500;600;700;800&display=swap');
+
+:root {
+  font-family: 'Assistant', 'Heebo', Arial, sans-serif;
+  --bg: #f8fafc;
+  --surface: #fff;
+  --ink: #182438;
+  --muted: #627287;
+  --border: #e4eaf1;
+  --green: #0c8278;
+  --green-light: #e8f7f4;
+  --orange: #b65c19;
+  --orange-bright: #f5a453;
+  --orange-light: #fff3e6;
+  --blue: #287ac0;
+  --blue-light: #edf5ff;
+  --pink: #fff0f4;
+  --purple: #7d60c3;
+  --purple-light: #f2eefe;
+  --shadow: 0 2px 8px #18243804;
+  color: var(--ink);
+  background: var(--bg);
+  font-synthesis: none;
+  font-weight: 400;
+}

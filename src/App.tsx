@@ -1,167 +1,527 @@
 import { useEffect, useRef, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleHelp, Cloud, Copy, Download, Droplets, Footprints, Heart, Home, Flame, Leaf, LoaderCircle, LogOut, Minus, Moon, Plus, Salad, Send, Settings2, ShieldCheck, Smile, Sprout, Sun, TrendingUp, UsersRound, Utensils, X } from 'lucide-react';
+import { ArrowLeft, Check, Copy, LoaderCircle, Plus, Sprout, Sun, X } from 'lucide-react';
 import type { Data, Entry, FoodEntry, FoodPlan, Member, Weight } from './domain';
-import { HABITS, addDays, entryFor, localDay, removeFoodEntry, score, streak, upsertEntry, upsertFoodEntry, upsertFoodPlan, upsertWeight, validFoodEntry, validFoodPlan, weekDates } from './domain';
-import { deleteCloudFoodEntry, exportData, fetchCloud, loadDemo, persistDemo, saveCloudEntry, saveCloudFoodEntry, saveCloudFoodPlan, saveCloudMember, saveCloudWeight, supabase } from './data';
-import FoodDiary, { FoodPlanCard, FoodWeek } from './FoodDiary';
-
-type Tab='today'|'progress'|'together'|'settings';
-const tabs=[{id:'today',label:'היום',icon:Home},{id:'progress',label:'התקדמות',icon:TrendingUp},{id:'together',label:'ביחד',icon:UsersRound},{id:'settings',label:'הגדרות',icon:Settings2}] as const;
-const icons={utensils:Utensils,salad:Salad,heart:Heart,moon:Moon};
-const energyLabels=['צריכה רגע','לאט היום','באמצע','יש לי כוח','מלאת אנרגיה'];
-const fmt=(d:string,options:Intl.DateTimeFormatOptions={day:'numeric',month:'long'})=>new Intl.DateTimeFormat('he-IL',options).format(new Date(d+'T12:00:00Z'));
-function getTab():Tab { const t=window.location.hash.slice(1);return tabs.some(x=>x.id===t)?t as Tab:'today'; }
-
-function Dialog({title,onClose,children}:{title:string;onClose:()=>void;children:ReactNode}) {
-  const ref=useRef<HTMLDialogElement>(null);
-  useEffect(()=>{const el=ref.current;el?.showModal();return()=>el?.close();},[]);
-  return <dialog ref={ref} className="dialog" onCancel={onClose} onClick={e=>{if(e.target===e.currentTarget)onClose();}} aria-labelledby="dialog-title"><div className="dialog-head"><h2 id="dialog-title">{title}</h2><button className="icon-button" aria-label="סגירה" onClick={onClose}><X/></button></div>{children}</dialog>;
-}
-function Ring({value,total=6,small=false}:{value:number;total?:number;small?:boolean}) {return <div className={'ring '+(small?'ring-small':'')} role="img" aria-label={`${value} מתוך ${total} סעיפים`}><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="33" className="ring-track"/><circle cx="40" cy="40" r="33" className="ring-fill" strokeDasharray={`${Math.min(value/total,1)*207.35} 207.35`}/></svg><span><b>{value}</b><small> / {total}</small></span></div>;}
-
-function Auth({notify}:{notify:(s:string)=>void}) {
-  const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[signup,setSignup]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');try{const r=signup?await supabase!.auth.signUp({email,password,options:{emailRedirectTo:window.location.origin}}):await supabase!.auth.signInWithPassword({email,password});if(r.error)throw r.error;if(signup&&!r.data.session)notify('שלחנו קישור לאישור כתובת המייל. אחרי האישור אפשר להתחבר.');}catch{setError('לא הצלחנו להתחבר. בדקי את הפרטים, אישור המייל והחיבור לאינטרנט.');}finally{setBusy(false);}}
-  return <div className="welcome"><div className="welcome-art"><div className="welcome-brand"><img src="/clementina.svg" width="44" height="44" alt=""/><strong>קלמנטינה</strong></div><span className="welcome-tag">קצת יותר קל לעקוב.</span><h1>היום שלך,<br/><em>בתמונה אחת.</em></h1><p>ארוחות, מים, תנועה והרגלים.<br/>מקום אחד לדברים שעושים לך טוב.</p><div className="welcome-features"><span><Utensils size={20}/> יומן אכילה אישי</span><span><TrendingUp size={20}/> התקדמות לאורך זמן</span><span><UsersRound size={20}/> לבד או ביחד</span></div></div><form className="panel auth-form" onSubmit={submit}><img src="/clementina.svg" width="48" height="48" alt=""/><h2>{signup?'יצירת חשבון':'איזה כיף שחזרת'}</h2><p className="muted">המעקב האישי שלך, עם אפשרות לשותפה.</p><label>כתובת מייל<input type="email" autoComplete="email" required dir="ltr" value={email} onChange={e=>setEmail(e.target.value)}/></label><label>סיסמה<input type="password" minLength={8} required autoComplete={signup?'new-password':'current-password'} dir="ltr" value={password} onChange={e=>setPassword(e.target.value)}/></label>{error&&<p role="alert" className="error-text">{error}</p>}<button className="primary" disabled={busy}>{busy?<LoaderCircle className="spin"/>:null}{signup?'יצירת חשבון':'התחברות'}<ArrowLeft size={18}/></button><button type="button" className="text-button" onClick={()=>{setSignup(!signup);setError('');}}>{signup?'כבר יש לי חשבון':'אין לך חשבון? הרשמה'}</button><a className="outline-button full" href="/?demo=1#today">לנסות בלי להירשם</a></form></div>;
-}
-
-function Onboarding({onDone}:{onDone:()=>void}) {
-  const [join,setJoin]=useState(false),[name,setName]=useState(''),[code,setCode]=useState(''),[weeks,setWeeks]=useState(12),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');try{const {error}=await supabase!.rpc(join?'join_duo':'create_duo',join?{p_code:code.trim(),p_name:name.trim()}:{p_name:name.trim(),p_weeks:weeks,p_start:localDay()});if(error)throw error;onDone();}catch{setError(join?'לא הצלחנו להצטרף. בדקי שהקוד נכון ושהאתגר עדיין פנוי.':'לא הצלחנו ליצור את האתגר. בדקי שהוגדרה סכמת הנתונים ב־Supabase.');}finally{setBusy(false);}}
-  return <div className="onboarding"><img className="onboarding-logo" src="/clementina.svg" width="52" height="52" alt="קלמנטינה"/><form className="panel auth-form" onSubmit={submit}><h1>מתחילים כאן</h1><p>הגדירי את המעקב שלך. אפשר להזמין שותפה גם בהמשך.</p><label>איך לקרוא לך?<input value={name} onChange={e=>setName(e.target.value)} required maxLength={30}/></label><div className="segmented"><button type="button" aria-pressed={!join} onClick={()=>setJoin(false)}>אתגר חדש</button><button type="button" aria-pressed={join} onClick={()=>setJoin(true)}>יש לי קוד הזמנה</button></div>{join?<label>קוד ההזמנה<input dir="ltr" required value={code} onChange={e=>setCode(e.target.value)}/></label>:<label>משך האתגר<select value={weeks} onChange={e=>setWeeks(Number(e.target.value))}>{[8,12,16,24].map(n=><option key={n} value={n}>{n} שבועות</option>)}</select></label>}{error&&<p className="error-text" role="alert">{error}</p>}<button className="primary" disabled={busy}>{busy?'רגע…':join?'הצטרפות לאתגר':'יצירת אתגר'}<ArrowLeft size={18}/></button></form></div>;
-}
+import {
+  entryFor,
+  localDay,
+  removeFoodEntry,
+  upsertEntry,
+  upsertFoodEntry,
+  upsertFoodPlan,
+  upsertWeight,
+  validFoodEntry,
+  validFoodPlan,
+} from './domain';
+import {
+  deleteCloudFoodEntry,
+  fetchCloud,
+  loadDemo,
+  persistDemo,
+  saveCloudEntry,
+  saveCloudFoodEntry,
+  saveCloudFoodPlan,
+  saveCloudMember,
+  saveCloudWeight,
+  supabase,
+} from './data';
+import { formatDate } from './lib/presentation';
+import { getTab } from './navigation';
+import type { Tab } from './navigation';
+import Dialog from './components/Dialog';
+import Auth from './features/auth/Auth';
+import Onboarding from './features/auth/Onboarding';
+import WeightForm from './features/progress/WeightForm';
+import Progress from './features/progress/Progress';
+import EnergyTrend from './features/progress/EnergyTrend';
+import Together from './features/together/Together';
+import CheerForm from './features/together/CheerForm';
+import Preferences from './features/settings/Preferences';
+import FoodWeek from './features/food/FoodWeek';
+import AppLayout from './components/AppLayout';
+import TodayPage from './features/daily/TodayPage';
+import CheckinForm from './features/daily/CheckinForm';
 
 export default function App() {
-  const isDemo=!supabase||new URLSearchParams(window.location.search).has('demo');
-  const [data,setData]=useState<Data|null>(null),[userId,setUserId]=useState(isDemo?'me':''),[ready,setReady]=useState(isDemo),[loading,setLoading]=useState(true),[fatal,setFatal]=useState(''),[refresh,setRefresh]=useState(0);
-  const [tab,setTab]=useState<Tab>(getTab),[today,setToday]=useState(localDay),[date,setDate]=useState(localDay),[modal,setModal]=useState<'checkin'|'weight'|'cheer'|'invite'|null>(null),[toast,setToast]=useState(''),[saveError,setSaveError]=useState(''),[busy,setBusy]=useState(false),[online,setOnline]=useState(navigator.onLine);
-  const saving=useRef(false),requestVersion=useRef(0),lastFocus=useRef<HTMLElement|null>(null);
-  useEffect(()=>{const h=()=>setTab(getTab());window.addEventListener('hashchange',h);return()=>window.removeEventListener('hashchange',h);},[]);
-  useEffect(()=>{const h=()=>setOnline(navigator.onLine);window.addEventListener('online',h);window.addEventListener('offline',h);const id=setInterval(()=>setToday(localDay()),30000);return()=>{window.removeEventListener('online',h);window.removeEventListener('offline',h);clearInterval(id);};},[]);
-  useEffect(()=>{if(isDemo)return;supabase!.auth.getSession().then(({data,error})=>{if(error)setFatal('לא הצלחנו לקרוא את ההתחברות. נסי לרענן.');setUserId(data.session?.user.id??'');setReady(true);});const {data:{subscription}}=supabase!.auth.onAuthStateChange((_e,s)=>{setUserId(s?.user.id??'');setReady(true);});return()=>subscription.unsubscribe();},[isDemo]);
-  useEffect(()=>{
-    if(!ready)return;
-    let active=true;requestVersion.current++;
-    setLoading(true);setFatal('');setData(null);
-    if(isDemo){try{setData(loadDemo());}catch(e){setFatal(e instanceof Error?e.message:'לא הצלחנו לקרוא את הנתונים השמורים.');}setLoading(false);return;}
-    if(!userId){setLoading(false);return;}
-    fetchCloud(userId).then(d=>{if(active)setData(d);}).catch(()=>{if(active)setFatal('הנתונים לא נטענו. בדקי את החיבור ונסי שוב.');}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};
-  },[ready,userId,isDemo,refresh]);
-  useEffect(()=>{if(isDemo||!userId||!data)return;let active=true;const reload=async()=>{if(document.hidden||saving.current)return;const v=requestVersion.current;try{const d=await fetchCloud(userId);if(active&&d&&v===requestVersion.current&&!saving.current)setData(d);}catch{if(active)setSaveError('העדכון מהענן לא הגיע. הנתונים המוצגים הם מהטעינה האחרונה.');}};const id=setInterval(reload,20000);window.addEventListener('focus',reload);return()=>{active=false;clearInterval(id);window.removeEventListener('focus',reload);};},[isDemo,userId,!!data]);
-  useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),5000);return()=>clearTimeout(t);},[toast]);
-  function openModal(m:typeof modal){lastFocus.current=document.activeElement as HTMLElement;setModal(m);setSaveError('');}
-  function closeModal(){if(saving.current)return;setModal(null);requestAnimationFrame(()=>lastFocus.current?.focus());}
-  async function commit(next:Data,remote:()=>Promise<void>,message='השינוי נשמר.') {
-    if(saving.current)return false;
-    saving.current=true;requestVersion.current++;setBusy(true);setSaveError('');
-    try{if(isDemo)persistDemo(next);else{if(!navigator.onLine)throw new Error('offline');await remote();}setData(next);setToast(message);return true;}catch(error){setSaveError(isDemo?'השמירה במכשיר לא הצליחה. ייתכן שהאחסון מלא או חסום; השינוי לא נשמר.':error instanceof Error&&error.message==='missing-calories-migration'?'כדי לשמור קלוריות, הריצי ב־Supabase את המיגרציה 003_optional_calories.sql.':error instanceof Error&&error.message==='missing-optional-amount-migration'?'כדי לשמור ארוחה ללא כמות, הריצי ב־Supabase את המיגרציה 004_optional_amount.sql.':'השינוי לא נשמר. בדקי את החיבור ונסי שוב.');return false;}finally{saving.current=false;setBusy(false);}
+  const isDemo = !supabase || new URLSearchParams(window.location.search).has('demo');
+  const [data, setData] = useState<Data | null>(null),
+    [userId, setUserId] = useState(isDemo ? 'me' : ''),
+    [ready, setReady] = useState(isDemo),
+    [loading, setLoading] = useState(true),
+    [fatal, setFatal] = useState(''),
+    [refresh, setRefresh] = useState(0);
+  const [tab, setTab] = useState<Tab>(getTab),
+    [today, setToday] = useState(localDay),
+    [date, setDate] = useState(localDay),
+    [modal, setModal] = useState<'checkin' | 'weight' | 'cheer' | 'invite' | null>(null),
+    [toast, setToast] = useState(''),
+    [saveError, setSaveError] = useState(''),
+    [busy, setBusy] = useState(false),
+    [online, setOnline] = useState(navigator.onLine);
+  const saving = useRef(false),
+    requestVersion = useRef(0),
+    lastFocus = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const h = () => setTab(getTab());
+    window.addEventListener('hashchange', h);
+    return () => window.removeEventListener('hashchange', h);
+  }, []);
+  useEffect(() => {
+    const h = () => setOnline(navigator.onLine);
+    window.addEventListener('online', h);
+    window.addEventListener('offline', h);
+    const id = setInterval(() => setToday(localDay()), 30000);
+    return () => {
+      window.removeEventListener('online', h);
+      window.removeEventListener('offline', h);
+      clearInterval(id);
+    };
+  }, []);
+  useEffect(() => {
+    if (isDemo) return;
+    supabase!.auth.getSession().then(({ data, error }) => {
+      if (error) setFatal('לא הצלחנו לקרוא את ההתחברות. נסי לרענן.');
+      setUserId(data.session?.user.id ?? '');
+      setReady(true);
+    });
+    const {
+      data: { subscription },
+    } = supabase!.auth.onAuthStateChange((_e, s) => {
+      setUserId(s?.user.id ?? '');
+      setReady(true);
+    });
+    return () => subscription.unsubscribe();
+  }, [isDemo]);
+  useEffect(() => {
+    if (!ready) return;
+    let active = true;
+    requestVersion.current++;
+    setLoading(true);
+    setFatal('');
+    setData(null);
+    if (isDemo) {
+      try {
+        setData(loadDemo());
+      } catch (e) {
+        setFatal(e instanceof Error ? e.message : 'לא הצלחנו לקרוא את הנתונים השמורים.');
+      }
+      setLoading(false);
+      return;
+    }
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+    fetchCloud(userId)
+      .then((d) => {
+        if (active) setData(d);
+      })
+      .catch(() => {
+        if (active) setFatal('הנתונים לא נטענו. בדקי את החיבור ונסי שוב.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [ready, userId, isDemo, refresh]);
+  useEffect(() => {
+    if (isDemo || !userId || !data) return;
+    let active = true;
+    const reload = async () => {
+      if (document.hidden || saving.current) return;
+      const v = requestVersion.current;
+      try {
+        const d = await fetchCloud(userId);
+        if (active && d && v === requestVersion.current && !saving.current) setData(d);
+      } catch {
+        if (active) setSaveError('העדכון מהענן לא הגיע. הנתונים המוצגים הם מהטעינה האחרונה.');
+      }
+    };
+    const id = setInterval(reload, 20000);
+    window.addEventListener('focus', reload);
+    return () => {
+      active = false;
+      clearInterval(id);
+      window.removeEventListener('focus', reload);
+    };
+  }, [isDemo, userId, !!data]);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(''), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
+  function openModal(m: typeof modal) {
+    lastFocus.current = document.activeElement as HTMLElement;
+    setModal(m);
+    setSaveError('');
   }
-  async function updateEntry(entry:Entry){if(!data||entry.user_id!==userId)return false;return commit(upsertEntry(data,entry),()=>saveCloudEntry(entry));}
-  async function updateFood(entry:FoodEntry){if(!data||!data.food_log_ready||entry.user_id!==userId)return false;if(!validFoodEntry(entry)){setSaveError('בדקי את פרטי הארוחה ונסי שוב.');return false;}return commit(upsertFoodEntry(data,entry),()=>saveCloudFoodEntry(entry),'הרישום נשמר ביומן האכילה.');}
-  async function deleteFood(entry:FoodEntry){if(!data||entry.user_id!==userId||!data.food_entries.some(item=>item.id===entry.id&&item.user_id===userId))return false;return commit(removeFoodEntry(data,entry.id),()=>deleteCloudFoodEntry(entry.id,userId),'הרישום הוסר מיומן האכילה.');}
-  async function updateFoodPlan(plan:FoodPlan){if(!data||!data.food_log_ready||plan.user_id!==userId)return false;if(!validFoodPlan(plan)){setSaveError('בדקי את תכנון הארוחות ונסי שוב.');return false;}return commit(upsertFoodPlan(data,plan),()=>saveCloudFoodPlan(plan),'תכנון הארוחות נשמר.');}
-  async function updateWeight(weight:Weight){if(!data)return false;return commit(upsertWeight(data,weight),()=>saveCloudWeight(weight),'המדידה נשמרה.');}
-  async function updateMember(member:Member){if(!data)return;await commit({...data,members:data.members.map(m=>m.user_id===member.user_id?member:m)},()=>saveCloudMember(member),'ההגדרות נשמרו.');}
-  async function cheer(message:string){if(!data)return false;const item={id:crypto.randomUUID(),group_id:data.group.id,user_id:userId,message,created_at:new Date().toISOString()};return commit({...data,cheers:[item,...data.cheers]},async()=>{const {error}=await supabase!.from('cheers').insert(item);if(error)throw error;},isDemo?'הפתק נוסף להדגמה במכשיר.':'ההודעה נשלחה.');}
-  const toastEl=toast?<div role="status" className="toast"><Check size={18}/>{toast}</div>:null;
-  if(!ready||loading)return <div className="loading-screen"><img src="/clementina.svg" width="64" alt=""/><h2>טוענים את קלמנטינה…</h2><LoaderCircle className="spin"/></div>;
-  if(fatal)return <div className="onboarding"><div className="panel"><h1>לא הצלחנו לטעון את הנתונים</h1><p role="alert">{fatal}</p><button className="primary" onClick={()=>setRefresh(x=>x+1)}>ננסה שוב</button></div></div>;
-  if(!isDemo&&!userId)return <>{toastEl}<Auth notify={setToast}/></>;
-  if(!data)return <Onboarding onDone={()=>setRefresh(x=>x+1)}/>;
-  const me=data.members.find(m=>m.user_id===userId);
-  if(!me)return <div className="onboarding"><p>לא נמצא פרופיל לחשבון הזה.</p></div>;
-  const partner=data.members.find(m=>m.user_id!==userId),entry=entryFor(data,userId,date);
-  const partnerEntry=partner?entryFor(data,partner.user_id,date):null;
-  const latestForMe=[...data.cheers].filter(cheer=>cheer.user_id!==userId).sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
-  const go=(t:Tab)=>{window.location.hash=t;setTab(t);};
-  return <div className="app-shell">
-    <a href="#main" className="skip-link">דילוג לתוכן</a>
-    <aside className="sidebar"><a className="brand" href="#today"><img src="/clementina.svg" alt=""/><span>קלמנטינה<small>תזונה, הרגלים ומה שביניהם</small></span></a><div className="sidebar-label">המעקב שלי</div><nav aria-label="ניווט ראשי">{tabs.map(t=><a href={'#'+t.id} key={t.id} aria-current={tab===t.id?'page':undefined} className={tab===t.id?'nav-item active':'nav-item'}><t.icon size={20}/><span>{t.label}</span></a>)}</nav><div className="sidebar-tip"><span className="stat-icon green"><Leaf size={20}/></span><strong>בקצב שלך</strong><p>מעקב יומי, לבד או ביחד.</p></div><button className="sidebar-profile" onClick={()=>go('settings')}><span className="avatar peach">{me.name.slice(0,1)}</span><span><strong>{me.name}</strong><small>{isDemo?'חשבון לדוגמה':'החשבון שלי'}</small></span><Settings2 size={17}/></button></aside>
-    <div className="workspace"><header className="topbar"><span className="breadcrumb">קלמנטינה <ChevronLeft size={14}/> <strong>{tabs.find(t=>t.id===tab)?.label}</strong></span><div className="topbar-right"><span className={'connection '+(!online?'offline':'')}><span/>{!online?'ללא חיבור':isDemo?'נשמר במכשיר':'מסונכרן'}</span><button className="avatar-stack" aria-label="לצפייה בפינה המשותפת" onClick={()=>go('together')}><span className="avatar green">{partner?.name.slice(0,1)??'+'}</span><span className="avatar peach">{me.name.slice(0,1)}</span></button></div></header>
-    <main id="main" tabIndex={-1}>
-      {isDemo&&<div className="demo-banner"><Sprout size={16}/><span><strong>מצב הדגמה</strong> · נתוני דוגמה, נשמרים רק בדפדפן הזה.</span>{supabase?<a href="/" className="text-button">לחשבון אמיתי <ArrowLeft size={14}/></a>:<button onClick={()=>go('settings')}>על ההדגמה <ArrowLeft size={14}/></button>}</div>}
-      {saveError&&<div className="error-banner" role="alert">{saveError}<button className="icon-button" onClick={()=>setSaveError('')} aria-label="סגירת הודעה"><X size={18}/></button></div>}
-      <div className="page-heading"><div><p className="eyebrow"><Sun size={16}/> {fmt(tab==='today'?date:today,{weekday:'long',day:'numeric',month:'long'})}</p><h1>{tab==='today'?'היום שלי':tab==='progress'?'ההתקדמות שלי':tab==='together'?'ביחד':'הגדרות'}</h1><p>{tab==='today'?'ארוחות, תנועה והרגלים. הכל במקום אחד.':tab==='progress'?'הנתונים שלך לאורך זמן.':tab==='together'?'מעקב משותף, כל אחת בקצב שלה.': 'הפרופיל, היעדים והחשבון שלך.'}</p></div>{tab==='today'&&<button className="primary" onClick={()=>openModal('checkin')}><Plus size={18}/> עדכון היום</button>}{tab==='progress'&&<button className="primary" onClick={()=>openModal('weight')}><Plus size={18}/> הוספת מדידה</button>}</div>
-      {tab==='today'&&<>
-        <div className="day-toolbar"><DatePicker date={date} today={today} start={data.group.start_date} setDate={setDate}/></div><DailyOverview entry={entry} me={me} activeStreak={streak(data,me,date)} busy={busy} onUpdate={updateEntry}/>
-        <div className="dashboard-grid"><div className="main-column"><FoodDiary key={`${userId}-${date}`} entries={data.food_entries} userId={userId} date={date} ready={data.food_log_ready} busy={busy} error={saveError} onSave={updateFood} onDelete={deleteFood}/><section className="panel habit-panel"><div className="section-heading"><div><h2>הרגלים</h2><p>סמני רק מה שכבר עשית.</p></div><span className="soft-label">{HABITS.filter(h=>entry[h.key]).length} מתוך 4</span></div><div className="habits">{HABITS.map(h=>{const Icon=icons[h.icon];return <button key={h.key} disabled={busy} className={'habit '+(entry[h.key]?'completed':'')} aria-pressed={entry[h.key]} onClick={()=>void updateEntry({...entry,[h.key]:!entry[h.key]})}><span className={'habit-icon '+h.color}><Icon size={22}/></span><span className="habit-copy"><strong>{h.title}</strong><small>{h.detail}</small></span><span className="checkbox">{entry[h.key]&&<Check size={17}/>}</span></button>;})}</div><div className="gentle-footnote"><Leaf size={15}/>אפשר לחזור ולעדכן גם בהמשך היום.</div></section>
-</div>
-        <div className="side-column"><section className="panel partner-panel"><div className="section-heading"><h2>השותפה שלי</h2><span className="mini-hearts"><Heart size={18}/><Heart size={13}/></span></div>{partner&&partnerEntry?<><div className="partner-summary"><span className="avatar avatar-large green">{partner.name.slice(0,1)}</span><div><h3>{partner.name}</h3><p>{fmt(date)} · {isDemo?'נתוני דוגמה':'הדיווח שלה'}</p></div><Ring small value={score(partnerEntry,partner)}/></div><p className="partner-caption">{score(partnerEntry,partner)} מתוך 6 הרגלים ויעדים הושלמו.</p><div className="partner-metrics"><span><Droplets size={16}/>{partnerEntry.water} כוסות</span><span><Footprints size={16}/>{partnerEntry.walk} דקות</span></div><button className="outline-button full" onClick={()=>openModal('cheer')}><Heart size={17}/> שליחת הודעה</button></>:<div className="empty"><UsersRound/><p>אפשר לעקוב לבד, או לצרף שותפה.</p><button className="primary" onClick={()=>openModal('invite')}>הזמנת שותפה</button></div>}</section>
-        <section className="energy-card"><span className="eyebrow"><Sun size={17}/> האנרגיה שלי</span><h2>איך האנרגיה שלך {date===today?'היום':'ביום הזה'}?</h2><div className="energy-options" role="group" aria-label="רמת האנרגיה">{energyLabels.map((label,i)=><button key={label} aria-label={label} title={label} aria-pressed={entry.energy===i+1} disabled={busy} className={entry.energy===i+1?'selected':''} onClick={()=>void updateEntry({...entry,energy:i+1})}><span className={'energy-face face-'+i}><i/><i/><b/></span></button>)}</div><p className="energy-caption">{entry.energy?`דיווחת: ${energyLabels[entry.energy-1]}`:'בחרי איך את מרגישה.'}</p></section>
-        {latestForMe&&<section className="panel latest-note"><span className="eyebrow"><Heart size={16}/> הודעה מ{partner?.name??'השותפה'}</span><p>{latestForMe.message}</p><button className="text-button" onClick={()=>go('together')}>לכל ההודעות <ArrowLeft size={15}/></button></section>}</div></div>
-        <FoodPlanCard key={userId} plan={data.food_plans.find(plan=>plan.user_id===userId)} userId={userId} ready={data.food_log_ready} busy={busy} error={saveError} onSave={updateFoodPlan}/>
-      </>}
-      {tab==='progress'&&<><Progress data={data} me={me} today={today} onWeight={()=>openModal('weight')}/><FoodWeek entries={data.food_entries} userId={userId} today={today} start={data.group.start_date} ready={data.food_log_ready} onOpenDay={selected=>{setDate(selected);go('today');}}/><EnergyTrend data={data} me={me} today={today}/></>}
-      {tab==='together'&&<Together data={data} me={me} today={today} onCheer={()=>openModal('cheer')} onInvite={()=>openModal('invite')}/>}
-      {tab==='settings'&&<Preferences key={userId} me={me} data={data} isDemo={isDemo} busy={busy} update={updateMember} switchUser={setUserId} notify={setToast}/>}
-      <footer><span>קלמנטינה</span><span>המעקב האישי שלך</span></footer>
-    </main></div>
-    <nav className="mobile-nav" aria-label="ניווט בנייד">{tabs.map(t=><a key={t.id} href={'#'+t.id} aria-current={tab===t.id?'page':undefined}><t.icon size={21}/><span>{t.label}</span></a>)}</nav>
-    {toastEl}
-    {modal==='checkin'&&<Dialog title="עדכון היום" onClose={closeModal}><Checkin entry={entry} me={me} busy={busy} error={saveError} onSave={async e=>{if(await updateEntry(e))closeModal();}}/></Dialog>}
-    {modal==='weight'&&<Dialog title="הוספת מדידה" onClose={closeModal}><WeightForm userId={userId} today={today} busy={busy} error={saveError} weights={data.weights} onSave={async w=>{if(await updateWeight(w))closeModal();}}/></Dialog>}
-    {modal==='cheer'&&<Dialog title="הודעה חדשה" onClose={closeModal}><CheerForm busy={busy} error={saveError} onSend={async s=>{if(await cheer(s))closeModal();}}/></Dialog>}
-    {modal==='invite'&&<Dialog title="הזמנת שותפה" onClose={closeModal}>{isDemo?<><p>במצב ההדגמה שתיכן כבר כאן. כדי להתחבר משני טלפונים, צריך לחבר את הפרויקט ל־Supabase. הוראות החיבור מצורפות לקוד.</p></>:<><p>שלחי לשותפה את כתובת האפליקציה ואת הקוד. אחרי הרשמה, היא תבחר ״יש לי קוד הזמנה״.</p><label>קוד ההזמנה<input dir="ltr" value={data.group.invite_code} readOnly onFocus={e=>e.target.select()}/></label><button className="primary" onClick={()=>void navigator.clipboard.writeText(data.group.invite_code).then(()=>setToast('הקוד הועתק.')).catch(()=>setToast('אפשר לסמן את הקוד ולהעתיק ידנית.'))}><Copy size={18}/> העתקת קוד</button><p className="muted">הקוד אישי לאתגר שלכן. שתפו אותו רק ביניכן.</p></>}</Dialog>}
-  </div>;
-}
-
-function DailyOverview({entry,me,activeStreak,busy,onUpdate}:{entry:Entry;me:Member;activeStreak:number;busy:boolean;onUpdate:(entry:Entry)=>Promise<boolean>}) {
-  const habits=HABITS.filter(h=>entry[h.key]).length;
-  return <section className="overview-cards" aria-label="סיכום היום">
-    <article className="panel summary-card habit-summary"><div className="summary-label"><span>ההרגלים שלי</span><span className="stat-icon green"><Check size={20}/></span></div><div className="summary-value">{habits}<small>מתוך 4</small></div><progress value={habits} max={4} aria-label="הרגלים שהושלמו"/><p>{habits===4?'כל ההרגלים סומנו':'מסמנים הרגלים בהמשך העמוד'}</p></article>
-    <article className="panel summary-card water-card"><div className="summary-label"><span>כוסות מים</span><span className="stat-icon blue"><Droplets size={20}/></span></div><div className="summary-value metric-value">{entry.water}<small>/ {me.water_goal} כוסות</small></div><progress value={Math.min(entry.water,me.water_goal)} max={me.water_goal} aria-label="התקדמות ליעד המים"/><p className="metric-remaining">{entry.water>=me.water_goal?'הגעת ליעד המים':`נותרו ${me.water_goal-entry.water} כוסות ליעד`}</p><div className="summary-actions"><button className="soft-button" disabled={busy||entry.water>=40} onClick={()=>void onUpdate({...entry,water:entry.water+1})}><Plus size={15}/> הוספת כוס</button><button className="icon-button" aria-label="הפחתת כוס מים" disabled={busy||entry.water===0} onClick={()=>void onUpdate({...entry,water:entry.water-1})}><Minus size={16}/></button></div></article>
-    <article className="panel summary-card walk-card"><div className="summary-label"><span>דקות הליכה</span><span className="stat-icon purple"><Footprints size={20}/></span></div><div className="summary-value metric-value">{entry.walk}<small>/ {me.walk_goal} דקות</small></div><progress value={Math.min(entry.walk,me.walk_goal)} max={me.walk_goal} aria-label="התקדמות ליעד ההליכה"/><p className="metric-remaining">{entry.walk>=me.walk_goal?'הגעת ליעד ההליכה':`נותרו ${me.walk_goal-entry.walk} דקות ליעד`}</p><div className="summary-actions"><button className="soft-button" disabled={busy||entry.walk>590} onClick={()=>void onUpdate({...entry,walk:entry.walk+10})}><Plus size={15}/> הוספת 10 דקות</button><button className="icon-button" aria-label="הפחתת 10 דקות הליכה" disabled={busy||entry.walk===0} onClick={()=>void onUpdate({...entry,walk:Math.max(0,entry.walk-10)})}><Minus size={16}/></button></div></article>
-    <article className="panel summary-card streak-card"><div className="summary-label"><span>הרצף שלי</span><span className="stat-icon peach"><Flame size={20}/></span></div><div className="summary-value">{activeStreak}<small>ימים</small></div><div className="streak-caption"><Flame size={18}/><span>{activeStreak?'ימים פעילים ברצף':'כל התחלה נחשבת'}</span></div><p>יום פעיל = הרגל או יעד אחד לפחות</p></article>
-  </section>;
-}
-
-function DatePicker({date,today,start,setDate}:{date:string;today:string;start:string;setDate:(d:string)=>void}) {return <div className="date-picker"><div className="date-controls"><button className="icon-button" disabled={date<=start} onClick={()=>setDate(addDays(date,-1))} aria-label="ליום הקודם"><ChevronRight size={18}/></button><span>{date===today?'היום':fmt(date,{weekday:'long',day:'numeric',month:'short'})}</span><button className="icon-button" disabled={date>=today} onClick={()=>setDate(addDays(date,1))} aria-label="ליום הבא"><ChevronLeft size={18}/></button>{date!==today&&<button className="text-button" onClick={()=>setDate(today)}>חזרה להיום</button>}</div><div className="week-days">{weekDates(date).map(d=><button key={d} disabled={d>today||d<start} aria-pressed={d===date} aria-label={fmt(d,{weekday:'long',day:'numeric',month:'long'})} onClick={()=>setDate(d)}><small>{fmt(d,{weekday:'short'})}</small><strong>{Number(d.slice(-2))}</strong>{d===today&&<i/>}</button>)}</div></div>;}
-
-function Checkin({entry,me,busy,error,onSave}:{entry:Entry;me:Member;busy:boolean;error:string;onSave:(e:Entry)=>void}) {
-  const [draft,setDraft]=useState(entry);
-  return <form onSubmit={e=>{e.preventDefault();onSave(draft);}}><p className="muted">{fmt(entry.date,{weekday:'long',day:'numeric',month:'long'})} · כאן אפשר לערוך את כל הדיווח ולהזין כמויות מדויקות. בסיום לחצי על שמירה.</p><div className="checkin-habits">{HABITS.map(h=><label className="check-label" key={h.key}><input type="checkbox" checked={draft[h.key]} onChange={e=>setDraft({...draft,[h.key]:e.target.checked})}/>{h.title}</label>)}</div><div className="form-grid"><label>כוסות מים · יעד {me.water_goal}<input type="number" min="0" max="40" step="1" inputMode="numeric" required value={draft.water} onChange={e=>setDraft({...draft,water:Number(e.target.value)})}/></label><label>דקות הליכה · יעד {me.walk_goal}<input type="number" min="0" max="600" step="1" inputMode="numeric" required value={draft.walk} onChange={e=>setDraft({...draft,walk:Number(e.target.value)})}/></label></div><label>איך האנרגיה?<select value={draft.energy??''} onChange={e=>setDraft({...draft,energy:e.target.value?Number(e.target.value):null})}><option value="">בוחרת אחר כך</option>{energyLabels.map((l,i)=><option key={l} value={i+1}>{l}</option>)}</select></label><label>פתק יומי · לא חובה<textarea maxLength={500} rows={3} value={draft.note} placeholder="מה עשה לך טוב היום?" onChange={e=>setDraft({...draft,note:e.target.value})}/><small className="muted">הפתק משותף לשתיכן.</small></label>{error&&<p role="alert" className="error-text">{error}</p>}<button className="primary full" disabled={busy}>{busy?'שומר…':'שמירת הדיווח'}<Check size={18}/></button></form>;
-}
-
-function WeightForm({userId,today,busy,error,weights,onSave}:{userId:string;today:string;busy:boolean;error:string;weights:Weight[];onSave:(w:Weight)=>void}) {
-  const [date,setDate]=useState(today),[kg,setKg]=useState(''),[shared,setShared]=useState(false);
-  const existing=weights.find(w=>w.user_id===userId&&w.date===date);
-  return <form onSubmit={e=>{e.preventDefault();if(Number(kg)>=20&&Number(kg)<=400)onSave({user_id:userId,date,kg:Number(kg),shared});}}><p className="muted">מדידה היא רק חלק מהתמונה. כברירת מחדל, היא נשארת רק שלך.</p><div className="form-grid"><label>תאריך<input type="date" required max={today} value={date} onChange={e=>setDate(e.target.value)}/></label><label>משקל בק״ג<input type="number" required min="20" max="400" step="0.1" inputMode="decimal" placeholder={existing?String(existing.kg):'למשל 80.5'} value={kg} onChange={e=>setKg(e.target.value)}/></label></div>{existing&&<p className="muted">קיימת מדידה של {existing.kg} ק״ג בתאריך הזה. שמירה תעדכן אותה.</p>}<label className="check-label"><input type="checkbox" checked={shared} onChange={e=>setShared(e.target.checked)}/>לשתף את המדידה עם השותפה</label>{error&&<p role="alert" className="error-text">{error}</p>}<button className="primary full" disabled={busy}>{busy?'שומר…':'שמירת המדידה'}</button></form>;
-}
-function CheerForm({busy,error,onSend}:{busy:boolean;error:string;onSend:(s:string)=>void}) {const [message,setMessage]=useState('');return <form onSubmit={e=>{e.preventDefault();if(message.trim())onSend(message.trim());}}><p className="muted">הודעה שתופיע במרחב המשותף.</p><div className="cheer-suggestions">{['גאה בך על כל צעד קטן','סיבוב קטן ביחד היום?','גם ביום פחות קל, אני איתך'].map(s=><button className="soft-button" type="button" key={s} onClick={()=>setMessage(s)}>{s}</button>)}</div><label>הפתק שלך<textarea required value={message} onChange={e=>setMessage(e.target.value)} maxLength={280} rows={4} placeholder="רק רציתי להגיד לך…"/></label>{error&&<p role="alert" className="error-text">{error}</p>}<button className="primary full" disabled={busy||!message.trim()}><Send size={17}/>{busy?'שולחים…':'שליחת הודעה'}</button></form>;}
-
-function Progress({data,me,today,onWeight}:{data:Data;me:Member;today:string;onWeight:()=>void}) {
-  const [range,setRange]=useState(7);const dates=Array.from({length:range},(_,i)=>addDays(today,i-range+1));
-  const weights=data.weights.filter(w=>w.user_id===me.user_id).sort((a,b)=>a.date.localeCompare(b.date));
-  const min=Math.min(...weights.map(w=>w.kg))-1,max=Math.max(...weights.map(w=>w.kg))+1;
-  const last=weights.at(-1),first=weights[0],change=last&&first?Math.round((last.kg-first.kg)*10)/10:0;
-  const recorded=data.entries.filter(e=>e.user_id===me.user_id&&dates.includes(e.date));
-  const energy=recorded.filter(e=>e.energy!==null);
-  const average=energy.length?(energy.reduce((s,e)=>s+e.energy!,0)/energy.length).toFixed(1):'—';
-  return <div className="progress-page"><div className="progress-summary"><section className="panel"><span className="stat-icon green"><Sprout/></span><p>ימים פעילים</p><h2>{recorded.filter(e=>score(e,me)>0).length}<small> מתוך {range}</small></h2></section><section className="panel"><span className="stat-icon peach"><Footprints/></span><p>דקות הליכה</p><h2>{recorded.reduce((s,e)=>s+e.walk,0)}<small> בתקופה</small></h2></section><section className="panel"><span className="stat-icon pink"><Sun/></span><p>אנרגיה ממוצעת</p><h2>{average}<small> מתוך 5</small></h2></section></div><section className="panel"><div className="section-heading"><div><h2>ההרגלים לאורך זמן</h2><p>הרגלים ויעדים שהושלמו בכל יום · מתוך 6</p></div><select aria-label="תקופת התצוגה" value={range} onChange={e=>setRange(Number(e.target.value))}><option value={7}>השבוע האחרון</option><option value={14}>שבועיים אחרונים</option><option value={28}>ארבעה שבועות</option></select></div><div className={'bar-chart '+(range>14?'dense':'')} role="img" aria-label="מספר הסעיפים היומי מתוך שישה">{dates.map(d=>{const n=score(entryFor(data,me.user_id,d),me);return <div className="chart-column" key={d} title={`${fmt(d)}: ${n} מתוך 6`}><span>{n}</span><div className="bar-space"><div className={d===today?'bar current':'bar'} style={{height:`${Math.max(3,n/6*100)}%`}}/></div><small>{range>14?Number(d.slice(-2)):fmt(d,{day:'numeric',month:'numeric'})}</small></div>;})}</div><p className="gentle-footnote"><Heart size={16}/> ימים ללא דיווח מוצגים כ־0.</p></section><div className="progress-grid"><section className="panel"><div className="section-heading"><div><h2>מעקב משקל</h2><p><ShieldCheck size={14}/> המדידות האישיות שלך</p></div><button className="icon-button" onClick={onWeight} aria-label="הוספת מדידה"><Plus size={20}/></button></div>{weights.length?<><div className="weight-numbers"><span><b>{last?.kg}</b> ק״ג<small>מדידה אחרונה · {fmt(last!.date)}</small></span><span className="weight-change">{change>0?'+':''}{change} ק״ג<small>מהמדידה הראשונה</small></span></div>{weights.length>1?<svg className="weight-chart" viewBox="0 0 500 160" role="img" aria-label="מגמת מדידות המשקל. הערכים המדויקים בטבלה שמתחת."><path d="M20 35H480 M20 80H480 M20 125H480" stroke="var(--border)" strokeDasharray="4 5"/><polyline points={weights.map((w,i)=>`${20+i/(weights.length-1)*460},${130-(w.kg-min)/(max-min)*110}`).join(' ')} fill="none" stroke="var(--green)" strokeWidth="3"/>{weights.map((w,i)=><circle key={w.date} cx={20+i/(weights.length-1)*460} cy={130-(w.kg-min)/(max-min)*110} r="5" fill="var(--green)"><title>{fmt(w.date)}: {w.kg} ק״ג</title></circle>)}</svg>:<p>עוד מדידה אחת ונוכל לראות מגמה.</p>}<details><summary>כל המדידות ({weights.length})</summary><table><thead><tr><th>תאריך</th><th>משקל</th><th>שיתוף</th></tr></thead><tbody>{[...weights].reverse().map(w=><tr key={w.date}><td>{fmt(w.date)}</td><td>{w.kg} ק״ג</td><td>{w.shared?'משותפת':'רק שלי'}</td></tr>)}</tbody></table></details></>:<div className="empty"><Leaf/><p>אין עדיין מדידות.<br/>אפשר להוסיף מדידה כשתרצי.</p><button className="outline-button" onClick={onWeight}>הוספת מדידה</button></div>}</section><section className="panel journal"><h2>ההערות שלי</h2><p className="muted">הערות מהדיווחים האחרונים</p>{data.entries.filter(e=>e.user_id===me.user_id&&e.note).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8).map(e=><article key={e.date}><small>{fmt(e.date)}</small><p>{e.note}</p></article>)}{!data.entries.some(e=>e.user_id===me.user_id&&e.note)&&<div className="empty"><Smile/><p>עוד אין הערות.<br/>הוסיפי אותם דרך ״עדכון היום״.</p></div>}</section></div></div>;
-}
-
-function Together({data,me,today,onCheer,onInvite}:{data:Data;me:Member;today:string;onCheer:()=>void;onInvite:()=>void}) {
-  const dates=Array.from({length:7},(_,i)=>addDays(today,i-6));
-  const sharedDays=dates.filter(d=>data.members.length===2&&data.members.every(m=>score(entryFor(data,m.user_id,d),m)>0)).length;
-  return <div className="together-page"><section className="together-hero"><div><span className="eyebrow">המרחב המשותף</span><h2>{data.members.length===2?'ההתקדמות שלכן, ביחד.':'אפשר גם ביחד.'}</h2><p>{data.members.length===2?`${sharedDays} ימים פעילים לשתיכן בשבוע האחרון.`:'המעקב שלך כבר עובד. שותפה יכולה להצטרף מתי שתרצי.'}</p><button className="outline-button" onClick={onInvite}><UsersRound size={18}/> הזמנת שותפה</button></div><span className="together-symbol"><UsersRound size={52}/></span></section><div className="duo-cards">{data.members.map(m=>{const e=entryFor(data,m.user_id,today);return <section key={m.user_id} className="panel"><div className="partner-summary"><span className={'avatar avatar-large '+(m.user_id===me.user_id?'peach':'green')}>{m.name.slice(0,1)}</span><div><h2>{m.name}{m.user_id===me.user_id?' · זאת אני':''}</h2><p>{streak(data,m,today)} ימים פעילים ברצף</p></div><Ring value={score(e,m)}/></div><div className="duo-week">{dates.map(d=><span key={d} title={`${fmt(d)}: ${score(entryFor(data,m.user_id,d),m)} מתוך 6`}><small>{fmt(d,{weekday:'short'})}</small><span className={score(entryFor(data,m.user_id,d),m)>0?'day-done':'day-empty'}>{score(entryFor(data,m.user_id,d),m)>0?<Check size={16}/>:<Minus size={14}/>}</span></span>)}</div>{e.note&&<p className="member-note">״{e.note}״</p>}<p className="muted">אנרגיה היום: {e.energy?energyLabels[e.energy-1]:'עוד לא דווחה'}</p>{m.user_id!==me.user_id&&data.weights.filter(w=>w.user_id===m.user_id&&w.shared).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,1).map(w=><p key={w.date} className="muted">מדידה שבחרה לשתף: {w.kg} ק״ג · {fmt(w.date)}</p>)}</section>;})}</div><section className="panel notes-board"><div className="section-heading"><div><h2>הודעות</h2><p>ההודעות שלכן במקום אחד.</p></div><button className="primary" onClick={onCheer}><Plus size={17}/> הודעה חדשה</button></div><div className="notes-grid">{[...data.cheers].sort((a,b)=>b.created_at.localeCompare(a.created_at)).map((c,i)=><article key={c.id} className={'note note-'+i%3}><Heart size={19}/><p>{c.message}</p><div><strong>{data.members.find(m=>m.user_id===c.user_id)?.name??'השותפה'}</strong><small>{new Intl.DateTimeFormat('he-IL',{day:'numeric',month:'short',timeZone:'Asia/Jerusalem'}).format(new Date(c.created_at))}</small></div></article>)}{data.cheers.length===0&&<div className="empty"><Heart/><p>עוד אין הודעות.</p></div>}</div></section></div>;
-}
-
-function EnergyTrend({data,me,today}:{data:Data;me:Member;today:string}) {
-  const days=Array.from({length:7},(_,i)=>addDays(today,i-6));
-  const reports=days.map(date=>({date,energy:entryFor(data,me.user_id,date).energy}));
-  return <section className="panel energy-trend" aria-labelledby="energy-trend-title">
-    <div className="section-heading"><div><h2 id="energy-trend-title">איך הרגשתי השבוע?</h2><p>רמת האנרגיה שדיווחת בשבעת הימים האחרונים.</p></div><span className="stat-icon peach"><Sun/></span></div>
-    {reports.some(r=>r.energy!==null)?<ol className="energy-trend-chart" aria-label="רמת האנרגיה בשבעת הימים האחרונים">
-      {reports.map(({date,energy})=><li key={date} aria-label={`${fmt(date,{weekday:'long',day:'numeric',month:'long'})}: ${energy===null?'לא דווחה אנרגיה':energyLabels[energy-1]}`}>
-        <span className="trend-number">{energy??'—'}</span><span className="trend-track"><span className={energy===null?'trend-bar empty-bar':'trend-bar'} style={{height:energy===null?'0%':`${energy*20}%`}}/></span><small>{fmt(date,{weekday:'short'})}</small>
-      </li>)}
-    </ol>:<p className="energy-trend-empty">הגרף יופיע אחרי דיווח האנרגיה הראשון.</p>}
-    <p className="energy-trend-footnote">דירוג אישי בין 1 ל־5.</p>
-  </section>;
-}
-
-function Preferences({me,data,isDemo,busy,update,switchUser,notify}:{me:Member;data:Data;isDemo:boolean;busy:boolean;update:(m:Member)=>Promise<void>;switchUser:(id:string)=>void;notify:(s:string)=>void}) {
-  const [name,setName]=useState(me.name),[water,setWater]=useState(me.water_goal),[walk,setWalk]=useState(me.walk_goal);
-  return <div className="settings-grid"><form className="panel" onSubmit={e=>{e.preventDefault();if(name.trim())void update({...me,name:name.trim(),water_goal:water,walk_goal:walk});}}><span className="stat-icon peach"><Settings2/></span><h2>הפרופיל והיעדים שלי</h2><label>השם שלך<input required maxLength={30} value={name} onChange={e=>setName(e.target.value)}/></label><div className="form-grid"><label>יעד כוסות מים ביום<input type="number" required min="1" max="20" step="1" value={water} onChange={e=>setWater(Number(e.target.value))}/></label><label>יעד דקות הליכה ביום<input type="number" required min="5" max="180" step="5" value={walk} onChange={e=>setWalk(Number(e.target.value))}/></label></div><p className="muted">היעדים הם העדפה אישית, ואפשר לשנות אותם בכל זמן. שינוי יעד מעדכן גם את חישובי ההתקדמות הקודמים.</p><button className="primary" disabled={busy||!name.trim()}>{busy?'שומר…':'שמירת שינויים'}<Check size={17}/></button></form><div className="settings-aside"><section className="panel"><span className="stat-icon green"><ShieldCheck/></span><h2>פרטיות וגיבוי</h2><p>כל אחת מדווחת על עצמה. ההרגלים, האנרגיה והפתקים משותפים; יומן האכילה ותכנון הארוחות אישיים, וכל מדידת משקל פרטית, אלא אם בחרת לשתף אותה.</p><button className="outline-button full" onClick={()=>{exportData(data);notify('הגיבוי הורד למכשיר.');}}><Download size={17}/> הורדת גיבוי הנתונים</button><p className="muted">הגיבוי כולל את הנתונים האישיים הזמינים בחשבון הזה.</p></section><section className="panel"><span className="stat-icon peach"><Cloud/></span><h2>{isDemo?'על ההדגמה':'החשבון שלי'}</h2><p>{isDemo?'נתוני דוגמה נשמרים בדפדפן הזה בלבד ולא עוברים לחשבון אישי.':'הנתונים נשמרים בחשבון שלך ומסתנכרנים בין המכשירים.'}</p>{isDemo?<><p className="muted">לבדיקת החוויה בלבד — החלפת דמות בהדגמה:</p><div className="segmented">{data.members.map(m=><button type="button" key={m.user_id} aria-pressed={me.user_id===m.user_id} onClick={()=>switchUser(m.user_id)}>{m.name}</button>)}</div></>:<button className="outline-button full" onClick={()=>void supabase!.auth.signOut().then(({error})=>{if(error)notify('ההתנתקות לא הצליחה. נסי שוב.');})}><LogOut size={17}/> יציאה מהחשבון</button>}</section></div><section className="care-note"><CircleHelp size={22}/><div><h3>לידיעתך</h3><p>המעקב אינו תחליף לייעוץ מקצועי. מומלץ להתאים יעדי תזונה ופעילות עם אשת מקצוע.</p></div></section></div>;
+  function closeModal() {
+    if (saving.current) return;
+    setModal(null);
+    requestAnimationFrame(() => lastFocus.current?.focus());
+  }
+  async function commit(next: Data, remote: () => Promise<void>, message = 'השינוי נשמר.') {
+    if (saving.current) return false;
+    saving.current = true;
+    requestVersion.current++;
+    setBusy(true);
+    setSaveError('');
+    try {
+      if (isDemo) persistDemo(next);
+      else {
+        if (!navigator.onLine) throw new Error('offline');
+        await remote();
+      }
+      setData(next);
+      setToast(message);
+      return true;
+    } catch (error) {
+      setSaveError(
+        isDemo
+          ? 'השמירה במכשיר לא הצליחה. ייתכן שהאחסון מלא או חסום; השינוי לא נשמר.'
+          : error instanceof Error && error.message === 'missing-calories-migration'
+            ? 'כדי לשמור קלוריות, הריצי ב־Supabase את המיגרציה 003_optional_calories.sql.'
+            : error instanceof Error && error.message === 'missing-optional-amount-migration'
+              ? 'כדי לשמור ארוחה ללא כמות, הריצי ב־Supabase את המיגרציה 004_optional_amount.sql.'
+              : 'השינוי לא נשמר. בדקי את החיבור ונסי שוב.',
+      );
+      return false;
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
+  }
+  async function updateEntry(entry: Entry) {
+    if (!data || entry.user_id !== userId) return false;
+    return commit(upsertEntry(data, entry), () => saveCloudEntry(entry));
+  }
+  async function updateFood(entry: FoodEntry) {
+    if (!data || !data.food_log_ready || entry.user_id !== userId) return false;
+    if (!validFoodEntry(entry)) {
+      setSaveError('בדקי את פרטי הארוחה ונסי שוב.');
+      return false;
+    }
+    return commit(
+      upsertFoodEntry(data, entry),
+      () => saveCloudFoodEntry(entry),
+      'הרישום נשמר ביומן האכילה.',
+    );
+  }
+  async function deleteFood(entry: FoodEntry) {
+    if (
+      !data ||
+      entry.user_id !== userId ||
+      !data.food_entries.some((item) => item.id === entry.id && item.user_id === userId)
+    )
+      return false;
+    return commit(
+      removeFoodEntry(data, entry.id),
+      () => deleteCloudFoodEntry(entry.id, userId),
+      'הרישום הוסר מיומן האכילה.',
+    );
+  }
+  async function updateFoodPlan(plan: FoodPlan) {
+    if (!data || !data.food_log_ready || plan.user_id !== userId) return false;
+    if (!validFoodPlan(plan)) {
+      setSaveError('בדקי את תכנון הארוחות ונסי שוב.');
+      return false;
+    }
+    return commit(upsertFoodPlan(data, plan), () => saveCloudFoodPlan(plan), 'תכנון הארוחות נשמר.');
+  }
+  async function updateWeight(weight: Weight) {
+    if (!data) return false;
+    return commit(upsertWeight(data, weight), () => saveCloudWeight(weight), 'המדידה נשמרה.');
+  }
+  async function updateMember(member: Member) {
+    if (!data) return;
+    await commit(
+      { ...data, members: data.members.map((m) => (m.user_id === member.user_id ? member : m)) },
+      () => saveCloudMember(member),
+      'ההגדרות נשמרו.',
+    );
+  }
+  async function cheer(message: string) {
+    if (!data) return false;
+    const item = {
+      id: crypto.randomUUID(),
+      group_id: data.group.id,
+      user_id: userId,
+      message,
+      created_at: new Date().toISOString(),
+    };
+    return commit(
+      { ...data, cheers: [item, ...data.cheers] },
+      async () => {
+        const { error } = await supabase!.from('cheers').insert(item);
+        if (error) throw error;
+      },
+      isDemo ? 'הפתק נוסף להדגמה במכשיר.' : 'ההודעה נשלחה.',
+    );
+  }
+  const toastEl = toast ? (
+    <div role="status" className="toast">
+      <Check size={18} />
+      {toast}
+    </div>
+  ) : null;
+  if (!ready || loading)
+    return (
+      <div className="loading-screen">
+        <img src="/clementina.svg" width="64" alt="" />
+        <h2>טוענים את קלמנטינה…</h2>
+        <LoaderCircle className="spin" />
+      </div>
+    );
+  if (fatal)
+    return (
+      <div className="onboarding">
+        <div className="panel">
+          <h1>לא הצלחנו לטעון את הנתונים</h1>
+          <p role="alert">{fatal}</p>
+          <button className="primary" onClick={() => setRefresh((x) => x + 1)}>
+            ננסה שוב
+          </button>
+        </div>
+      </div>
+    );
+  if (!isDemo && !userId)
+    return (
+      <>
+        {toastEl}
+        <Auth notify={setToast} />
+      </>
+    );
+  if (!data) return <Onboarding onDone={() => setRefresh((x) => x + 1)} />;
+  const me = data.members.find((m) => m.user_id === userId);
+  if (!me)
+    return (
+      <div className="onboarding">
+        <p>לא נמצא פרופיל לחשבון הזה.</p>
+      </div>
+    );
+  const partner = data.members.find((m) => m.user_id !== userId),
+    entry = entryFor(data, userId, date);
+  const go = (t: Tab) => {
+    window.location.hash = t;
+    setTab(t);
+  };
+  return (
+    <>
+      <AppLayout
+        me={me}
+        partner={partner}
+        online={online}
+        isDemo={isDemo}
+        tab={tab}
+        onNavigate={go}
+      >
+        {isDemo && (
+          <div className="demo-banner">
+            <Sprout size={16} />
+            <span>
+              <strong>מצב הדגמה</strong> · נתוני דוגמה, נשמרים רק בדפדפן הזה.
+            </span>
+            {supabase ? (
+              <a href="/" className="text-button">
+                לחשבון אמיתי <ArrowLeft size={14} />
+              </a>
+            ) : (
+              <button onClick={() => go('settings')}>
+                על ההדגמה <ArrowLeft size={14} />
+              </button>
+            )}
+          </div>
+        )}
+        {saveError && (
+          <div className="error-banner" role="alert">
+            {saveError}
+            <button
+              className="icon-button"
+              onClick={() => setSaveError('')}
+              aria-label="סגירת הודעה"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        )}
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">
+              <Sun size={16} />{' '}
+              {formatDate(tab === 'today' ? date : today, {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+              })}
+            </p>
+            <h1>
+              {tab === 'today'
+                ? 'היום שלי'
+                : tab === 'progress'
+                  ? 'ההתקדמות שלי'
+                  : tab === 'together'
+                    ? 'ביחד'
+                    : 'הגדרות'}
+            </h1>
+            <p>
+              {tab === 'today'
+                ? 'ארוחות, תנועה והרגלים. הכל במקום אחד.'
+                : tab === 'progress'
+                  ? 'הנתונים שלך לאורך זמן.'
+                  : tab === 'together'
+                    ? 'מעקב משותף, כל אחת בקצב שלה.'
+                    : 'הפרופיל, היעדים והחשבון שלך.'}
+            </p>
+          </div>
+          {tab === 'today' && (
+            <button className="primary" onClick={() => openModal('checkin')}>
+              <Plus size={18} /> עדכון היום
+            </button>
+          )}
+          {tab === 'progress' && (
+            <button className="primary" onClick={() => openModal('weight')}>
+              <Plus size={18} /> הוספת מדידה
+            </button>
+          )}
+        </div>
+        {tab === 'today' && (
+          <TodayPage
+            data={data}
+            me={me}
+            userId={userId}
+            date={date}
+            today={today}
+            isDemo={isDemo}
+            busy={busy}
+            saveError={saveError}
+            setDate={setDate}
+            onUpdateEntry={updateEntry}
+            onSaveFood={updateFood}
+            onDeleteFood={deleteFood}
+            onSavePlan={updateFoodPlan}
+            onCheer={() => openModal('cheer')}
+            onInvite={() => openModal('invite')}
+            onTogether={() => go('together')}
+          />
+        )}
+        {tab === 'progress' && (
+          <>
+            <Progress data={data} me={me} today={today} onWeight={() => openModal('weight')} />
+            <FoodWeek
+              entries={data.food_entries}
+              userId={userId}
+              today={today}
+              start={data.group.start_date}
+              ready={data.food_log_ready}
+              onOpenDay={(selected) => {
+                setDate(selected);
+                go('today');
+              }}
+            />
+            <EnergyTrend data={data} me={me} today={today} />
+          </>
+        )}
+        {tab === 'together' && (
+          <Together
+            data={data}
+            me={me}
+            today={today}
+            onCheer={() => openModal('cheer')}
+            onInvite={() => openModal('invite')}
+          />
+        )}
+        {tab === 'settings' && (
+          <Preferences
+            key={userId}
+            me={me}
+            data={data}
+            isDemo={isDemo}
+            busy={busy}
+            update={updateMember}
+            switchUser={setUserId}
+            notify={setToast}
+          />
+        )}
+      </AppLayout>
+      {toastEl}
+      {modal === 'checkin' && (
+        <Dialog title="עדכון היום" onClose={closeModal}>
+          <CheckinForm
+            entry={entry}
+            me={me}
+            busy={busy}
+            error={saveError}
+            onSave={async (e) => {
+              if (await updateEntry(e)) closeModal();
+            }}
+          />
+        </Dialog>
+      )}
+      {modal === 'weight' && (
+        <Dialog title="הוספת מדידה" onClose={closeModal}>
+          <WeightForm
+            userId={userId}
+            today={today}
+            busy={busy}
+            error={saveError}
+            weights={data.weights}
+            onSave={async (w) => {
+              if (await updateWeight(w)) closeModal();
+            }}
+          />
+        </Dialog>
+      )}
+      {modal === 'cheer' && (
+        <Dialog title="הודעה חדשה" onClose={closeModal}>
+          <CheerForm
+            busy={busy}
+            error={saveError}
+            onSend={async (s) => {
+              if (await cheer(s)) closeModal();
+            }}
+          />
+        </Dialog>
+      )}
+      {modal === 'invite' && (
+        <Dialog title="הזמנת שותפה" onClose={closeModal}>
+          {isDemo ? (
+            <>
+              <p>
+                במצב ההדגמה שתיכן כבר כאן. כדי להתחבר משני טלפונים, צריך לחבר את הפרויקט ל־Supabase.
+                הוראות החיבור מצורפות לקוד.
+              </p>
+            </>
+          ) : (
+            <>
+              <p>
+                שלחי לשותפה את כתובת האפליקציה ואת הקוד. אחרי הרשמה, היא תבחר ״יש לי קוד הזמנה״.
+              </p>
+              <label>
+                קוד ההזמנה
+                <input
+                  dir="ltr"
+                  value={data.group.invite_code}
+                  readOnly
+                  onFocus={(e) => e.target.select()}
+                />
+              </label>
+              <button
+                className="primary"
+                onClick={() =>
+                  void navigator.clipboard
+                    .writeText(data.group.invite_code)
+                    .then(() => setToast('הקוד הועתק.'))
+                    .catch(() => setToast('אפשר לסמן את הקוד ולהעתיק ידנית.'))
+                }
+              >
+                <Copy size={18} /> העתקת קוד
+              </button>
+              <p className="muted">הקוד אישי לאתגר שלכן. שתפו אותו רק ביניכן.</p>
+            </>
+          )}
+        </Dialog>
+      )}
+    </>
+  );
 }
